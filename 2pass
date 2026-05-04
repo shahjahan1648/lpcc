@@ -1,0 +1,161 @@
+Generate Symbol table, Literal table, Pool table & Intermediate code of a two-pass Assembler for the
+import sys
+
+MOT={
+    "STOP": ("IS","00"),
+    "ADD": ("IS","01"),
+    "SUB": ("IS","02"),
+    "MULT": ("IS","03"),
+    "MOVER": ("IS","04"),
+    "MOVEM": ("IS","05"),
+    "COMP":("IS","06"),
+    "BC":("IS","07"),
+    "DIV":("IS","08"),
+    "READ":("IS","09"),
+    "PRINT":("IS","10"),
+    "LOAD":("IS","11"),
+    "START":("AD","01"),
+    "END":("AD","02"),
+    "ORIGIN":("AD","03"),
+    "EQU":("AD","04"),
+    "LTORG":("AD","05"),
+    "DS":("DL","01"),
+    "DC":("DL","02")
+}
+
+REG ={
+    "AREG":"01",
+    "BREG":"02",
+    "CREG":"03",
+    "DREG":"04",
+}
+SYMTAB ={}
+LITTAB =[]
+POOLTAB =[0]
+LC = 0
+
+def process_line(line):
+    global LC
+    tokens = line.split()
+    if not tokens:
+        return " "
+
+    label = ""
+    instr = ""
+    op1 = ""
+
+    if tokens[0] in MOT or tokens[0] =="END":
+        instr = tokens[0]
+        if len(tokens) > 1: op1 = tokens[1]
+    else:
+        label = tokens[0]
+        instr = tokens[1]
+        if len(tokens) > 2: op1 = tokens[2]
+
+    if label:
+        SYMTAB[label] = LC
+
+    if instr == "START":
+        LC = int(op1)
+        return f"(AD, 01) (C,{LC})"
+
+    elif instr in ["LTORG","END"]:
+        ic_output = f"(AD,{MOT[instr][1]})"
+
+        for i in range(POOLTAB[-1], len(LITTAB)):
+            LITTAB[i][1] = LC
+            LC += 1
+        if instr == "LTORG":
+            POOLTAB.append(len(LITTAB))
+        return ic_output
+
+    elif MOT[instr][0] =="DL":
+        size = int(op1)
+        output = f"(DL,{MOT[instr][1]}) (C,{op1})"
+        if instr == "DS":
+            LC += size
+        else:
+            LC += 1
+        return output
+
+    elif MOT[instr][0] =="IS":
+        output = f"(IS,{MOT[instr][1]})"
+        if op1:
+            if op1.startswith("="):
+                LITTAB.append([op1,-1])
+                output += f"(L,{len(LITTAB)-1})"
+            elif op1 in REG:
+                output += f"(RG, {REG[op1]})"
+            else:
+                if op1 not in SYMTAB:
+                    SYMTAB[op1] = -1
+                output += f"(S,{list(SYMTAB.keys()).index(op1)})"
+        LC += 1
+        return output
+    return ""
+try:
+    input_file = "stress_test.asm"
+
+    with open(input_file, "r") as source, open("sample_IC.text", "w") as ic_file:
+        print(f"Processing Pass 1 for {input_file}...")
+        for line in source:
+            # Clean the line: remove commas and extra spaces
+            clean_line = line.strip().replace(",", " ")
+            result = process_line(clean_line)
+            if result:
+                ic_file.write(result + "\n")
+
+    # ... (previous MOT and variable definitions remain the same)
+
+    # Update the display section at the bottom of your script:
+    print("\n--- SYMBOL TABLE ---")
+    print("Index\tSymbol\tAddress")
+    for i, (sym, addr) in enumerate(SYMTAB.items()):
+        print(f"{i}\t{sym}\t{addr}")
+
+    print("\n--- LITERAL TABLE ---")
+    print("Index\tLiteral\tAddress")
+    for i, lit in enumerate(LITTAB):
+        print(f"{i}\t{lit[0]}\t{lit[1]}")
+
+    # NEW: Pool Table Display
+    print("\n--- POOL TABLE ---")
+    print("Pool#\tLiteral Index Start")
+    for i, start_index in enumerate(POOLTAB):
+        print(f"{i + 1}\t#{start_index}")
+
+except FileNotFoundError:
+    print("File not found.")
+
+
+
+
+
+
+START 100
+A DS 3
+L1 MOVER AREG, B
+ADD BREG, ='15'
+B EQU A
+ORIGIN L1+10
+C DC 5
+MOVEM CREG, ='7'
+END
+START 200
+READ N
+MOVER AREG, ='10'
+MOVEM AREG, TERM
+MULT BREG, ='2'
+LTORG
+NEXT READ B
+ADD CREG, ='5'
+TERM DS 1
+N DS 1
+B DS 1
+END
+START 100
+A DC 1
+LOAD A
+ADD ='5'
+LTORG
+END
