@@ -1,0 +1,62 @@
+import re
+
+
+class TACGenerator:
+    def __init__(self):
+        self.temp_count = 1
+
+    def get_new_temp(self):
+        temp = f"T{self.temp_count}"
+        self.temp_count += 1
+        return temp
+
+    def generate_tac(self, expression):
+        # Splitting Assignment: A = S - F * 100
+        target, expr = expression.split('=')
+        target = target.strip()
+        expr = expr.strip()
+
+        # Tokenize (Handles numbers and variables)
+        tokens = re.findall(r'[a-zA-Z0-9]+|[\+\-\*/\(\)]', expr)
+
+        # Simple implementation of Shunting-yard/Stack logic for TAC
+        operators = []
+        operands = []
+        precedence = {'+': 1, '-': 1, '*': 2, '/': 2}
+
+        def process_operator():
+            op = operators.pop()
+            right = operands.pop()
+            left = operands.pop()
+            res = self.get_new_temp()
+            print(f"{res} = {left} {op} {right}")
+            operands.append(res)
+
+        for token in tokens:
+            if re.match(r'[a-zA-Z0-9]+', token):
+                operands.append(token)
+            elif token in precedence:
+                while (operators and operators[-1] in precedence and
+                       precedence[operators[-1]] >= precedence[token]):
+                    process_operator()
+                operators.append(token)
+
+        while operators:
+            process_operator()
+
+        # Final Assignment
+        print(f"{target} = {operands[0]}")
+
+
+# --- Execution ---
+if __name__ == "__main__":
+    tac = TACGenerator()
+
+    print("--- Sample 1 ---")
+    # Input from your PDF: A = S – F * 100
+    tac.generate_tac("A = S - F * 100")
+
+    print("\n--- Sample 2 ---")
+    # Input from your PDF: x = a + b * c / d
+    tac.temp_count = 1  # Reset counter for clarity
+    tac.generate_tac("x = a + b * c / d")
