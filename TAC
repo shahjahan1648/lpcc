@@ -1,62 +1,159 @@
 import re
 
+temp_count = 1
+label_count = 1
 
-class TACGenerator:
-    def __init__(self):
-        self.temp_count = 1
+def new_temp():
+    global temp_count
+    t = f"t{temp_count}"
+    temp_count += 1
+    return t
 
-    def get_new_temp(self):
-        temp = f"T{self.temp_count}"
-        self.temp_count += 1
-        return temp
-
-    def generate_tac(self, expression):
-        # Splitting Assignment: A = S - F * 100
-        target, expr = expression.split('=')
-        target = target.strip()
-        expr = expr.strip()
-
-        # Tokenize (Handles numbers and variables)
-        tokens = re.findall(r'[a-zA-Z0-9]+|[\+\-\*/\(\)]', expr)
-
-        # Simple implementation of Shunting-yard/Stack logic for TAC
-        operators = []
-        operands = []
-        precedence = {'+': 1, '-': 1, '*': 2, '/': 2}
-
-        def process_operator():
-            op = operators.pop()
-            right = operands.pop()
-            left = operands.pop()
-            res = self.get_new_temp()
-            print(f"{res} = {left} {op} {right}")
-            operands.append(res)
-
-        for token in tokens:
-            if re.match(r'[a-zA-Z0-9]+', token):
-                operands.append(token)
-            elif token in precedence:
-                while (operators and operators[-1] in precedence and
-                       precedence[operators[-1]] >= precedence[token]):
-                    process_operator()
-                operators.append(token)
-
-        while operators:
-            process_operator()
-
-        # Final Assignment
-        print(f"{target} = {operands[0]}")
+def new_label():
+    global label_count
+    l = label_count
+    label_count += 1
+    return l
 
 
-# --- Execution ---
+# ✅ STRONG TOKENIZER (handles no-space input)
+def tokenize(expr):
+    return re.findall(r'[A-Za-z]+|\d+|==|<=|>=|!=|[+\-*/()<>:=]', expr)
+
+
+# ---------- EXPRESSION TAC ----------
+def generate_expr_TAC(lhs, rhs):
+    precedence = {'+':1, '-':1, '*':2, '/':2}
+    tokens = tokenize(rhs)
+
+    stack = []
+    output = []
+    ops = []
+    code = []
+
+    for token in tokens:
+        if token.isalnum():
+            output.append(token)
+        else:
+            while ops and precedence.get(ops[-1],0) >= precedence.get(token,0):
+                output.append(ops.pop())
+            ops.append(token)
+
+    while ops:
+        output.append(ops.pop())
+
+    for token in output:
+        if token.isalnum():
+            stack.append(token)
+        else:
+            b = stack.pop()
+            a = stack.pop()
+            t = new_temp()
+            code.append(f"{t} = {a} {token} {b}")
+            stack.append(t)
+
+    code.append(f"{lhs} = {stack.pop()}")
+    return code
+
+
+# ✅ FIXED CONDITION PARSER
+def parse_condition(cond):
+    tokens = tokenize(cond)
+
+    # Example: ['a', '<', 'b']
+    if len(tokens) == 3:
+        return tokens[0], tokens[1], tokens[2]
+    else:
+        # handles a<b+c
+        op_index = 1
+        left = tokens[0]
+        op = tokens[1]
+        right = "".join(tokens[2:])
+        return left, op, right
+
+
+# ---------- IF ----------
+def generate_if_TAC(line):
+    code = []
+
+    cond = re.search(r'\((.*?)\)', line).group(1)
+    stmt = line.split(')')[1].replace(';','').strip()
+
+    a, op, b = parse_condition(cond)
+
+    t = new_temp()
+    code.append(f"{t} = {a} {op} {b}")
+
+    L1 = new_label()
+    L2 = new_label()
+
+    code.append(f"if {t} goto {L1}")
+    code.append(f"goto {L2}")
+
+    code.append(f"{L1}:")
+    var, expr = stmt.split('=')
+    code.extend(generate_expr_TAC(var.strip(), expr.strip()))
+
+    code.append(f"{L2}:")
+    return code
+
+
+# ---------- WHILE ----------
+def generate_while_TAC(line):
+    code = []
+
+    cond = re.search(r'\((.*?)\)', line).group(1)
+    stmt = line.split(')')[1].replace(';','').strip()
+
+    start = new_label()
+    Ltrue = new_label()
+    Lfalse = new_label()
+
+    code.append(f"{start}:")
+
+    a, op, b = parse_condition(cond)
+
+    t = new_temp()
+    code.append(f"{t} = {a} {op} {b}")
+
+    code.append(f"if {t} goto {Ltrue}")
+    code.append(f"goto {Lfalse}")
+
+    code.append(f"{Ltrue}:")
+    var, expr = stmt.split('=')
+    code.extend(generate_expr_TAC(var.strip(), expr.strip()))
+
+    code.append(f"goto {start}")
+    code.append(f"{Lfalse}:")
+    return code
+
+
+# ---------- MAIN ----------
+def main():
+    global temp_count, label_count
+    temp_count = 1
+    label_count = 1
+
+    line = input("Enter statement:\n")
+
+    if line.startswith("if"):
+        tac = generate_if_TAC(line)
+
+    elif line.startswith("while"):
+        tac = generate_while_TAC(line)
+
+    else:
+        lhs, rhs = line.split('=')
+        tac = generate_expr_TAC(lhs.strip(), rhs.strip())
+
+    print("\n--- TAC ---")
+    for i, line in enumerate(tac, 1):
+        print(f"{i}) {line}")
+
+
 if __name__ == "__main__":
-    tac = TACGenerator()
+    main()
 
-    print("--- Sample 1 ---")
-    # Input from your PDF: A = S – F * 100
-    tac.generate_tac("A = S - F * 100")
-
-    print("\n--- Sample 2 ---")
-    # Input from your PDF: x = a + b * c / d
-    tac.temp_count = 1  # Reset counter for clarity
-    tac.generate_tac("x = a + b * c / d")
+#Input examples:
+#a=b+c*d;
+#if(a<b) x=a+c;
