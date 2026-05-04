@@ -1,0 +1,224 @@
+import re
+
+def parse_tac(code):
+    lines = []
+    for line in code:
+        line = line.strip()
+        if line == "":
+            continue
+        parts = line.split("=", 1)
+        if len(parts) == 2:
+            lhs = parts[0].strip()
+            rhs = parts[1].strip()
+            lines.append([lhs, rhs])
+        else:
+            lines.append([line, ""])
+    return lines
+
+
+def constant_folding(tac):
+    print("\n--- Constant Folding ---")
+    optimized = []
+    changed = False
+
+    for lhs, rhs in tac:
+        match = re.match(r'^(\d+)\s*([+\-*/])\s*(\d+)$', rhs)
+        if match:
+            op1 = int(match.group(1))
+            operator = match.group(2)
+            op2 = int(match.group(3))
+
+            if operator == '+':
+                result = op1 + op2
+            elif operator == '-':
+                result = op1 - op2
+            elif operator == '*':
+                result = op1 * op2
+            elif operator == '/':
+                result = op1 // op2
+
+            print(f"  {lhs} = {rhs}  -->  {lhs} = {result}")
+            optimized.append([lhs, str(result)])
+            changed = True
+        else:
+            optimized.append([lhs, rhs])
+
+    if not changed:
+        print("  No constant folding possible.")
+
+    return optimized
+
+
+def constant_propagation(tac):
+    print("\n--- Constant Propagation ---")
+    constants = {}
+    optimized = []
+    changed = False
+
+    for lhs, rhs in tac:
+        new_rhs = rhs
+
+        for var, val in constants.items():
+            new_rhs = re.sub(r'\b' + var + r'\b', val, new_rhs)
+
+        if new_rhs != rhs:
+            print(f"  {lhs} = {rhs}  -->  {lhs} = {new_rhs}")
+            changed = True
+
+        optimized.append([lhs, new_rhs])
+
+        if re.match(r'^\d+$', new_rhs.strip()):
+            constants[lhs] = new_rhs.strip()
+
+    if not changed:
+        print("  No constant propagation possible.")
+
+    return optimized
+
+
+def dead_code_elimination(tac):
+    print("\n--- Dead Code Elimination ---")
+
+    used_vars = set()
+
+    for lhs, rhs in tac:
+        tokens = re.findall(r'[a-zA-Z_]\w*', rhs)
+        for t in tokens:
+            used_vars.add(t)
+
+    if tac:
+        last_lhs = tac[-1][0]
+        used_vars.add(last_lhs)
+
+    optimized = []
+    changed = False
+
+    for lhs, rhs in tac:
+        if lhs not in used_vars:
+            print(f"  REMOVED: {lhs} = {rhs}  (dead code)")
+            changed = True
+        else:
+            optimized.append([lhs, rhs])
+
+    if not changed:
+        print("  No dead code found.")
+
+    return optimized
+
+
+def common_subexpression_elimination(tac):
+    print("\n--- Common Subexpression Elimination ---")
+
+    expr_map = {}
+    optimized = []
+    changed = False
+
+    for lhs, rhs in tac:
+        if rhs in expr_map:
+            print(f"  {lhs} = {rhs}  -->  {lhs} = {expr_map[rhs]}")
+            optimized.append([lhs, expr_map[rhs]])
+            changed = True
+        else:
+            expr_map[rhs] = lhs
+            optimized.append([lhs, rhs])
+
+    if not changed:
+        print("  No common subexpression found.")
+
+    return optimized
+
+
+def strength_reduction(tac):
+    print("\n--- Strength Reduction ---")
+
+    optimized = []
+    changed = False
+
+    for lhs, rhs in tac:
+        match = re.match(r'^(\w+)\s*\*\s*2$', rhs)
+        if match:
+            var = match.group(1)
+            print(f"  {lhs} = {rhs}  -->  {lhs} = {var} + {var}")
+            optimized.append([lhs, f"{var} + {var}"])
+            changed = True
+            continue
+
+        match = re.match(r'^2\s*\*\s*(\w+)$', rhs)
+        if match:
+            var = match.group(1)
+            print(f"  {lhs} = {rhs}  -->  {lhs} = {var} + {var}")
+            optimized.append([lhs, f"{var} + {var}"])
+            changed = True
+            continue
+
+        match = re.match(r'^(\w+)\s*\*\s*4$', rhs)
+        if match:
+            var = match.group(1)
+            print(f"  {lhs} = {rhs}  -->  {lhs} = {var} << 2")
+            optimized.append([lhs, f"{var} << 2"])
+            changed = True
+            continue
+
+        match = re.match(r'^(\w+)\s*/\s*2$', rhs)
+        if match:
+            var = match.group(1)
+            print(f"  {lhs} = {rhs}  -->  {lhs} = {var} >> 1")
+            optimized.append([lhs, f"{var} >> 1"])
+            changed = True
+            continue
+
+        optimized.append([lhs, rhs])
+
+    if not changed:
+        print("  No strength reduction possible.")
+
+    return optimized
+
+
+def print_tac(tac, title):
+    print(f"\n{'='*50}")
+    print(f"  {title}")
+    print(f"{'='*50}")
+    for lhs, rhs in tac:
+        print(f"  {lhs} = {rhs}")
+    print(f"{'='*50}")
+
+
+def main():
+    print("Enter Three Address Code (one per line)")
+    print("Type 'done' when finished:\n")
+
+    code = []
+    while True:
+        line = input()
+        if line.strip().lower() == 'done':
+            break
+        code.append(line)
+
+    tac = parse_tac(code)
+
+    print_tac(tac, "ORIGINAL THREE ADDRESS CODE")
+
+    print("\n" + "=" * 50)
+    print("  APPLYING OPTIMIZATIONS")
+    print("=" * 50)
+
+    tac = constant_folding(tac)
+    tac = constant_propagation(tac)
+    tac = constant_folding(tac)
+    tac = dead_code_elimination(tac)
+    tac = common_subexpression_elimination(tac)
+    tac = strength_reduction(tac)
+
+    print_tac(tac, "FINAL OPTIMIZED CODE")
+
+
+main()
+
+#INPUT EXAMPLE:
+# t1 = 2 * 3
+# t2 = a + t1
+# t3 = a + t1
+# t4 = b * 2
+# t5 = t2 + t3
+# done
