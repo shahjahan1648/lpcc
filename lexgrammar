@@ -1,0 +1,81 @@
+%{
+    #include <stdio.h>
+    #include <string.h>
+
+    struct SymbolTable {
+        char lexeme[30];
+        char type[20];
+    } ST[100];
+
+    int count = 0;
+
+    void insert(char* lex, char* type) {
+        for(int i=0; i<count; i++) {
+            if(strcmp(ST[i].lexeme, lex) == 0) return;
+        }
+        strcpy(ST[count].lexeme, lex);
+        strcpy(ST[count].type, type);
+        count++;
+    }
+%}
+
+%%
+[\t ]+      ;
+
+is|am|are|was|were|be|do|does|did|go|went|read|write { 
+    printf("%s: VERB\n", yytext); 
+    insert(yytext, "VERB");
+}
+
+he|she|it|they|we|I|you|him|her|them { 
+    printf("%s: PRONOUN\n", yytext); 
+    insert(yytext, "PRONOUN");
+}
+
+and|or|but|because|if|then { 
+    printf("%s: CONJUNCTION\n", yytext); 
+    insert(yytext, "CONJUNCTION");
+}
+
+in|on|at|under|over|with|by|about { 
+    printf("%s: PREPOSITION\n", yytext); 
+    insert(yytext, "PREPOSITION");
+}
+
+good|bad|happy|sad|big|small|fast|slow|quick { 
+    printf("%s: ADJECTIVE\n", yytext); 
+    insert(yytext, "ADJECTIVE");
+}
+
+[a-zA-Z]+ { 
+    printf("%s: NOUN\n", yytext); 
+    insert(yytext, "NOUN");
+}
+
+.|\n        ;
+
+%%
+
+int yywrap() {
+    return 1;
+}
+
+int main() {
+    printf("Enter English text (Ctrl+D to finish):\n");
+    yylex(); 
+    
+    printf("\n--- SYMBOL TABLE ---\n");
+    printf("Lexeme\t\tType\n");
+    for(int i=0; i<count; i++) {
+        printf("%s\t\t%s\n", ST[i].lexeme, ST[i].type);
+    }
+    return 0;
+}
+
+
+
+sudo apt update
+sudo apt install flex gcc
+lex pos.l
+gcc lex.yy.c -o analyzer -lfl
+./analyzer
