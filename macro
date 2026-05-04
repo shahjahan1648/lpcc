@@ -1,0 +1,109 @@
+Design a two-pass Macro processor. with suitable data structure(consider simple macro, Nested Macro, Macro with parameter)
+
+class MacroProcessor:
+    def __init__(self):
+        # Data Structures from documentation
+        self.mnt = {}  # {name: [num_params, mdt_index]}
+        self.mdt = []  # List of macro instructions
+        self.ala = []  # Formal vs Positional mapping
+        self.intermediate_code = []
+        self.expanded_code = []
+
+    def process(self, assembly_input):
+        lines = assembly_input.strip().split('\n')
+        is_def = False
+        curr_macro = None
+
+        # --- PASS 1: Definition Mode ---
+        for line in lines:
+            parts = line.split()
+            if not parts: continue
+
+            if parts[0] == "MACRO":
+                is_def = True
+                curr_macro = None
+                continue
+
+            if is_def:
+                if curr_macro is None:
+                    # Capture Macro Name and Formal Parameters
+                    curr_macro = parts[0]
+                    params = parts[1:] if len(parts) > 1 else []
+                    # Create ALA entry for this macro
+                    formal_params = [p.strip(',') for p in params]
+                    self.mnt[curr_macro] = [len(formal_params), len(self.mdt), formal_params]
+                elif parts[0] == "MEND":
+                    self.mdt.append("MEND")
+                    is_def = False
+                else:
+                    # Replace formal params with #1, #2... in MDT
+                    mdt_line = line
+                    f_params = self.mnt[curr_macro][2]
+                    for i, param in enumerate(f_params):
+                        mdt_line = mdt_line.replace(param, f"#{i + 1}")
+                    self.mdt.append(mdt_line)
+            else:
+                self.intermediate_code.append(line)
+
+        # --- PASS 2: Expansion Mode ---
+        for line in self.intermediate_code:
+            parts = line.split()
+            mnemonic = parts[0]
+
+            if mnemonic in self.mnt:
+                # RUN: Expansion of macro call
+                num_params, mdt_start, f_params = self.mnt[mnemonic]
+                actual_params = [p.strip(',') for p in parts[1:]]
+
+                # Expand using MDT
+                curr = mdt_start
+                while self.mdt[curr] != "MEND":
+                    expanded_line = self.mdt[curr]
+                    # Substitute positional params with actual values
+                    for i, actual in enumerate(actual_params):
+                        expanded_line = expanded_line.replace(f"#{i + 1}", actual)
+                    self.expanded_code.append(expanded_line)
+                    curr += 1
+            else:
+                self.expanded_code.append(line)
+
+    def display_tables(self):
+        print("\n--- MNT (Macro Name Table) ---")
+        print("Name\tParams\tIndex")
+        for name, data in self.mnt.items():
+            print(f"{name}\t{data[0]}\t{data[1]}")
+
+        print("\n--- MDT (Macro Definition Table) ---")
+        for i, line in enumerate(self.mdt):
+            print(f"{i}\t{line}")
+
+        print("\n--- ALA (Argument List Array - Formal) ---")
+        for name, data in self.mnt.items():
+            print(f"{name}: {', '.join([f'#{i + 1}: {p}' for i, p in enumerate(data[2])])}")
+
+        print("\n--- Final Expanded Code ---")
+        for line in self.expanded_code:
+            print(line)
+
+
+# --- Sample Input (Based on PDF Example) ---
+asm_source = """
+LOAD A
+MACRO
+ABC
+LOAD p
+SUB q
+MEND
+MACRO
+ADD1 ARG
+LOAD X
+STORE ARG
+MEND
+ABC
+ADD1 5
+END
+"""
+
+mp = MacroProcessor()
+mp.process(asm_source)
+mp.display_tables()
